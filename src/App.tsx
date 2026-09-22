@@ -1,160 +1,104 @@
+import { useState } from "react";
 import "./styles.css";
+import { StoreProvider, useStore } from "./state/store";
+import { ToastProvider, useToast } from "./ui/Toast";
+import { Dashboard } from "./ui/Dashboard";
+import { AssessmentsPage } from "./ui/AssessmentsPage";
+import { SchedulePage } from "./ui/SchedulePage";
 
-const project = {
-  "id": "hxwl-11",
-  "port": 5111,
-  "title": "眼科验光记录",
-  "subtitle": "视力、屈光参数与复查处方对比",
-  "stack": "React + Vite + TypeScript + CSS",
-  "theme": [
-    "#2563eb",
-    "#059669",
-    "#dc2626"
-  ],
-  "domain": "眼视光",
-  "users": [
-    "验光师",
-    "门店顾问",
-    "复查医生"
-  ],
-  "metrics": [
-    "近视进展",
-    "散光变化",
-    "复查提醒",
-    "处方数量"
-  ],
-  "filters": [
-    "儿童",
-    "成人",
-    "渐进片",
-    "角膜塑形镜"
-  ],
-  "fields": [
-    "裸眼视力",
-    "矫正视力",
-    "球镜",
-    "柱镜",
-    "轴位",
-    "瞳距",
-    "角膜曲率"
-  ],
-  "records": [
-    [
-      "Patient-032",
-      "儿童近视",
-      "复查",
-      "右眼-2.75DS，轴位180"
-    ],
-    [
-      "Patient-081",
-      "渐进片",
-      "初配",
-      "ADD +1.50，瞳高待确认"
-    ],
-    [
-      "Patient-144",
-      "散光",
-      "复查",
-      "柱镜变化0.50D"
-    ]
-  ]
-};
+type Tab = "assessments" | "schedule";
 
-const statusColors = ["status-ok", "status-watch", "status-danger"];
+function Shell() {
+  const { data, dispatch } = useStore();
+  const toast = useToast();
+  const [tab, setTab] = useState<Tab>("assessments");
+  const [schedulePick, setSchedulePick] = useState<string | null>(null);
 
-function MetricCard({ label, value, index }: { label: string; value: string; index: number }) {
-  return (
-    <article className="metric-card">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <i className={statusColors[index % statusColors.length]} />
-    </article>
-  );
-}
-
-function App() {
-  const values = project.metrics.map((metric: string, index: number) => {
-    const base = [84, 12, 31, 7][index % 4];
-    return String(base + index * 3);
-  });
+  const goSchedule = (assessmentId: string | null) => {
+    setSchedulePick(assessmentId);
+    setTab("schedule");
+  };
 
   return (
     <main className="app-shell">
       <section className="hero">
         <div>
-          <p className="eyebrow">{project.id} · port {project.port}</p>
-          <h1>{project.title}</h1>
-          <p className="subtitle">{project.subtitle}</p>
+          <p className="eyebrow">hxwl-11 · 双眼视功能复训排程</p>
+          <h1>眼科验光记录 → 双眼视功能复训排程</h1>
+          <p className="subtitle">
+            每次评估登记患者、远距离/近距离隐斜、调节幅度与集合近点；
+            调节幅度低于年龄下限（Hofstetter 15−0.25×年龄）或集合近点超过 10cm 时进入
+            <strong> 训练待复核</strong>，须填训练方案才可排课。评估确认后冻结，更正生成带原因新版本并保留旧值。
+          </p>
         </div>
         <div className="stack-card">
-          <span>技术栈</span>
-          <strong>{project.stack}</strong>
+          <span>数据 / 规则 / 页面 分层</span>
+          <strong>
+            domain（类型·存储·示例）
+            <br />
+            rules（临床·占用·版本·校验）
+            <br />
+            state（reducer）· ui（页面）
+          </strong>
+          <button
+            className="reset-btn"
+            onClick={() => {
+              if (window.confirm("恢复为内置演示数据？当前录入将被清空。")) {
+                dispatch({ type: "RESET_SAMPLE" });
+                toast("已恢复演示数据");
+              }
+            }}
+          >
+            重置演示数据
+          </button>
         </div>
       </section>
 
-      <section className="metrics-grid">
-        {project.metrics.map((metric: string, index: number) => (
-          <MetricCard key={metric} label={metric} value={values[index]} index={index} />
-        ))}
-      </section>
+      <Dashboard data={data} />
 
-      <section className="workspace">
-        <aside className="panel narrow">
-          <h2>角色</h2>
-          <div className="chips">
-            {project.users.map((user: string) => (
-              <span key={user}>{user}</span>
-            ))}
-          </div>
-          <h2>筛选</h2>
-          <div className="chips muted">
-            {project.filters.map((filter: string) => (
-              <button key={filter}>{filter}</button>
-            ))}
-          </div>
-        </aside>
+      <nav className="main-tabs">
+        <button className={tab === "assessments" ? "active" : ""} onClick={() => setTab("assessments")}>
+          评估与版本链
+        </button>
+        <button className={tab === "schedule" ? "active" : ""} onClick={() => setTab("schedule")}>
+          复训排课
+        </button>
+      </nav>
 
-        <section className="panel">
-          <div className="section-heading">
-            <div>
-              <p>{project.domain}</p>
-              <h2>记录字段</h2>
-            </div>
-            <button className="primary-action">新增记录</button>
-          </div>
-          <div className="field-grid">
-            {project.fields.map((field: string) => (
-              <label key={field}>
-                <span>{field}</span>
-                <input placeholder={"填写" + field} />
-              </label>
-            ))}
-          </div>
-        </section>
-      </section>
+      {tab === "assessments" ? (
+        <AssessmentsPage
+          onGoSchedule={goSchedule}
+          preselectId={schedulePick}
+          onConsumePreselect={() => setSchedulePick(null)}
+        />
+      ) : (
+        <SchedulePage
+          preselectId={schedulePick}
+          onConsumePreselect={() => setSchedulePick(null)}
+        />
+      )}
 
-      <section className="records panel">
-        <div className="section-heading">
-          <div>
-            <p>示例数据</p>
-            <h2>近期记录</h2>
-          </div>
-          <button>导出摘要</button>
-        </div>
-        <div className="record-list">
-          {project.records.map((record: string[], index: number) => (
-            <article key={record.join("-")} className="record-card">
-              <div className="record-index">{String(index + 1).padStart(2, "0")}</div>
-              <div>
-                <h3>{record[0]}</h3>
-                <p>{record.slice(1).join(" · ")}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+      <footer className="rules-foot">
+        <h3>系统规则</h3>
+        <ul>
+          <li>登记项：患者、年龄、远/近视隐斜（△ EXO/ESO/正位）、调节幅度 AMP（D）、集合近点 NPC（cm）。</li>
+          <li>排课门槛：AMP ≥ 15−0.25×年龄 且 NPC ≤ 10cm；任一不达标即为训练待复核，补齐训练方案前排课按钮禁用。</li>
+          <li>占用规则：同一训练位同一时段至多 1 人，同一患者同日至多 1 节；释放后时段立即可约。</li>
+          <li>冻结与版本：确认后检查值不可改；更正必须填原因，生成新版本，旧版本标记「已被取代」并完整保留。</li>
+          <li>已排课后修改检查值：更正确认时先释放依据旧版本排的全部有效课时，再按新版本重新排课。</li>
+          <li>数据保存在浏览器本地（localStorage），刷新后评估、排课、占用与版本链保持一致。</li>
+        </ul>
+      </footer>
     </main>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <StoreProvider>
+      <ToastProvider>
+        <Shell />
+      </ToastProvider>
+    </StoreProvider>
+  );
+}
