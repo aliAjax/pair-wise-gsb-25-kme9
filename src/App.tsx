@@ -1,160 +1,136 @@
+import { useMemo, useState } from "react";
 import "./styles.css";
+import { StoreProvider } from "./state/StoreProvider";
+import { useStore } from "./state/store";
+import { Notice } from "./ui/components/Notice";
+import { AssessmentPage } from "./ui/pages/AssessmentPage";
+import { SchedulePage } from "./ui/pages/SchedulePage";
+import { OccupancyPage } from "./ui/pages/OccupancyPage";
+import { VersionsPage } from "./ui/pages/VersionsPage";
+import { NPC_LIMIT_CM } from "./rules/clinical";
 
-const project = {
-  "id": "hxwl-11",
-  "port": 5111,
-  "title": "眼科验光记录",
-  "subtitle": "视力、屈光参数与复查处方对比",
-  "stack": "React + Vite + TypeScript + CSS",
-  "theme": [
-    "#2563eb",
-    "#059669",
-    "#dc2626"
-  ],
-  "domain": "眼视光",
-  "users": [
-    "验光师",
-    "门店顾问",
-    "复查医生"
-  ],
-  "metrics": [
-    "近视进展",
-    "散光变化",
-    "复查提醒",
-    "处方数量"
-  ],
-  "filters": [
-    "儿童",
-    "成人",
-    "渐进片",
-    "角膜塑形镜"
-  ],
-  "fields": [
-    "裸眼视力",
-    "矫正视力",
-    "球镜",
-    "柱镜",
-    "轴位",
-    "瞳距",
-    "角膜曲率"
-  ],
-  "records": [
-    [
-      "Patient-032",
-      "儿童近视",
-      "复查",
-      "右眼-2.75DS，轴位180"
-    ],
-    [
-      "Patient-081",
-      "渐进片",
-      "初配",
-      "ADD +1.50，瞳高待确认"
-    ],
-    [
-      "Patient-144",
-      "散光",
-      "复查",
-      "柱镜变化0.50D"
-    ]
-  ]
-};
+type Tab = "assess" | "schedule" | "occupancy" | "versions";
 
-const statusColors = ["status-ok", "status-watch", "status-danger"];
+const TABS: Array<{ key: Tab; label: string }> = [
+  { key: "assess", label: "评估登记" },
+  { key: "schedule", label: "复训排课" },
+  { key: "occupancy", label: "占用台账" },
+  { key: "versions", label: "版本链" },
+];
 
-function MetricCard({ label, value, index }: { label: string; value: string; index: number }) {
+function Metrics() {
+  const { state } = useStore();
+  const metrics = useMemo(() => {
+    const chains = new Set(state.assessments.map((a) => a.chainId));
+    return [
+      { label: "评估链总数", value: chains.size },
+      { label: "训练待复核", value: state.assessments.filter((a) => a.status === "review").length },
+      { label: "待排课", value: state.assessments.filter((a) => a.status === "ready").length },
+      { label: "已占用时段", value: state.bookings.length },
+    ];
+  }, [state]);
+
   return (
-    <article className="metric-card">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <i className={statusColors[index % statusColors.length]} />
-    </article>
+    <section className="metrics-grid">
+      {metrics.map((m, i) => (
+        <article key={m.label} className="metric-card">
+          <span>{m.label}</span>
+          <strong>{m.value}</strong>
+          <i className={["status-ok", "status-watch", "status-danger", "status-info"][i % 4]} />
+        </article>
+      ))}
+    </section>
   );
 }
 
-function App() {
-  const values = project.metrics.map((metric: string, index: number) => {
-    const base = [84, 12, 31, 7][index % 4];
-    return String(base + index * 3);
-  });
+function RulesPanel() {
+  return (
+    <aside className="panel rules-panel">
+      <p className="eyebrow-sm">规则说明</p>
+      <h2>判定与冻结</h2>
+      <ul>
+        <li>
+          调节幅度年龄下限：<strong>15 − 0.25 × 年龄</strong>（D，Hofstetter 最小幅度）
+        </li>
+        <li>
+          集合近点 <strong>&gt; {NPC_LIMIT_CM}cm</strong> 判定集合不足
+        </li>
+        <li>任一项异常且评估确认 →「训练待复核」，须填训练方案才可排课</li>
+        <li>检查值正常 →「评估合格」，无需复训、不开放排课</li>
+        <li>同一训练位时段（日期 × 时段 × 训练位）只能排一人</li>
+        <li>已排课后更正检查值：先释放原时段，再生成更正版本</li>
+        <li>确认即冻结；更正新建带原因版本，旧值完整保留可审计</li>
+        <li>刷新页面后经一致性修复，评估、排课、占用、版本链保持一致</li>
+      </ul>
+    </aside>
+  );
+}
+
+function Shell() {
+  const { reset } = useStore();
+  const [tab, setTab] = useState<Tab>("assess");
+  const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
+
+  function goSchedule(assessmentId: string) {
+    setSelectedAssessmentId(assessmentId);
+    setTab("schedule");
+  }
 
   return (
     <main className="app-shell">
       <section className="hero">
         <div>
-          <p className="eyebrow">{project.id} · port {project.port}</p>
-          <h1>{project.title}</h1>
-          <p className="subtitle">{project.subtitle}</p>
+          <p className="eyebrow">hxwl-11 · 双眼视功能复训排程</p>
+          <h1>双眼视功能评估与复训排课</h1>
+          <p className="subtitle">
+            登记远近视隐斜、调节幅度与集合近点；异常评估经训练待复核、填写训练方案后进入排课；
+            确认冻结、更正留痕、训练位时段唯一占用。
+          </p>
         </div>
         <div className="stack-card">
-          <span>技术栈</span>
-          <strong>{project.stack}</strong>
+          <span>分层架构</span>
+          <strong>数据层 data / 规则层 rules / 页面层 ui</strong>
+          <button onClick={reset}>恢复演示数据</button>
         </div>
       </section>
 
-      <section className="metrics-grid">
-        {project.metrics.map((metric: string, index: number) => (
-          <MetricCard key={metric} label={metric} value={values[index]} index={index} />
+      <Notice />
+      <Metrics />
+
+      <nav className="tabs">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            className={tab === t.key ? "tab active" : "tab"}
+            onClick={() => setTab(t.key)}
+          >
+            {t.label}
+          </button>
         ))}
-      </section>
+      </nav>
 
-      <section className="workspace">
-        <aside className="panel narrow">
-          <h2>角色</h2>
-          <div className="chips">
-            {project.users.map((user: string) => (
-              <span key={user}>{user}</span>
-            ))}
-          </div>
-          <h2>筛选</h2>
-          <div className="chips muted">
-            {project.filters.map((filter: string) => (
-              <button key={filter}>{filter}</button>
-            ))}
-          </div>
-        </aside>
-
-        <section className="panel">
-          <div className="section-heading">
-            <div>
-              <p>{project.domain}</p>
-              <h2>记录字段</h2>
-            </div>
-            <button className="primary-action">新增记录</button>
-          </div>
-          <div className="field-grid">
-            {project.fields.map((field: string) => (
-              <label key={field}>
-                <span>{field}</span>
-                <input placeholder={"填写" + field} />
-              </label>
-            ))}
-          </div>
-        </section>
-      </section>
-
-      <section className="records panel">
-        <div className="section-heading">
-          <div>
-            <p>示例数据</p>
-            <h2>近期记录</h2>
-          </div>
-          <button>导出摘要</button>
+      {tab === "assess" && (
+        <div className="assess-workspace">
+          <AssessmentPage onGoSchedule={goSchedule} />
+          <RulesPanel />
         </div>
-        <div className="record-list">
-          {project.records.map((record: string[], index: number) => (
-            <article key={record.join("-")} className="record-card">
-              <div className="record-index">{String(index + 1).padStart(2, "0")}</div>
-              <div>
-                <h3>{record[0]}</h3>
-                <p>{record.slice(1).join(" · ")}</p>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+      )}
+      {tab === "schedule" && (
+        <SchedulePage
+          selectedAssessmentId={selectedAssessmentId}
+          setSelectedAssessmentId={setSelectedAssessmentId}
+        />
+      )}
+      {tab === "occupancy" && <OccupancyPage />}
+      {tab === "versions" && <VersionsPage />}
     </main>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <StoreProvider>
+      <Shell />
+    </StoreProvider>
+  );
+}
